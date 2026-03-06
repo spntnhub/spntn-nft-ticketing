@@ -42,7 +42,7 @@ class BT_Tickets {
                 <h3><?php esc_html_e( 'Your Ticket', 'blockchain-ticketing' ); ?> <span id="bt-token-id"></span></h3>
                 <p class="bt-success-msg"><?php esc_html_e( 'Show this QR code at the event entrance.', 'blockchain-ticketing' ); ?></p>
                 <div id="bt-qr-code" class="bt-qr-container"></div>
-                <p><a id="bt-tx-link" href="#" target="_blank" rel="noopener" style="display:none;"><?php esc_html_e( 'View on Polygonscan', 'blockchain-ticketing' ); ?></a></p>
+                <p><a id="bt-tx-link" href="#" target="_blank" rel="noopener" style="display:none;"><?php esc_html_e( 'View on Explorer', 'blockchain-ticketing' ); ?></a></p>
             </div>
         </div>
         <?php
