@@ -22,11 +22,14 @@ class BT_Admin {
     }
 
     public static function sanitize( array $input ): array {
+        $allowed_chains = [ 'polygon', 'base', 'arbitrum', 'optimism' ];
+        $chain = in_array( $input['chain'] ?? '', $allowed_chains, true ) ? $input['chain'] : 'polygon';
         return [
             'api_key'            => sanitize_text_field( $input['api_key']    ?? '' ),
             'backend_url'        => esc_url_raw( rtrim( $input['backend_url'] ?? '', '/' ) ),
             'contract_address'   => sanitize_text_field( $input['contract_address'] ?? '' ),
             'organizer_wallet'   => sanitize_text_field( $input['organizer_wallet']  ?? '' ),
+            'chain'              => $chain,
         ];
     }
 
@@ -62,6 +65,28 @@ class BT_Admin {
                                 <?php esc_html_e( 'Get API Key', 'blockchain-ticketing' ); ?>
                             </button>
                             <p class="description"><?php esc_html_e( 'Free API key. Email info@spntn.com for support.', 'blockchain-ticketing' ); ?></p>
+                        </td>
+                    </tr>
+                    <tr>
+                        <th scope="row"><label for="bt_chain"><?php esc_html_e( 'Default Chain', 'blockchain-ticketing' ); ?></label></th>
+                        <td>
+                            <select id="bt_chain" name="<?php echo esc_attr( BT_OPTION_KEY ); ?>[chain]">
+                                <?php
+                                $cur_chain = $opts['chain'] ?? 'polygon';
+                                $chains = [
+                                    'polygon'  => 'Polygon (POL)',
+                                    'base'     => 'Base (ETH)',
+                                    'arbitrum' => 'Arbitrum One (ETH)',
+                                    'optimism' => 'Optimism (ETH)',
+                                ];
+                                foreach ( $chains as $slug => $label ) :
+                                ?>
+                                    <option value="<?php echo esc_attr( $slug ); ?>" <?php selected( $cur_chain, $slug ); ?>>
+                                        <?php echo esc_html( $label ); ?>
+                                    </option>
+                                <?php endforeach; ?>
+                            </select>
+                            <p class="description"><?php esc_html_e( 'Default chain for new events. Can be overridden per event.', 'blockchain-ticketing' ); ?></p>
                         </td>
                     </tr>
                     <tr>
@@ -156,6 +181,8 @@ class BT_Admin {
         $default_contract  = $opts['contract_address']  ?? '';
         $default_organizer = $opts['organizer_wallet']  ?? '';
 
+        $default_chain = $opts['chain'] ?? 'polygon';
+
         $body = wp_json_encode( [
             'name'             => $post->post_title,
             'description'      => wp_strip_all_tags( $post->post_content ),
@@ -167,6 +194,7 @@ class BT_Admin {
             'paymentToken'     => get_post_meta( $post_id, '_bt_payment_token', true ),
             'organizerWallet'  => get_post_meta( $post_id, '_bt_organizer_wallet', true ) ?: $default_organizer,
             'contractAddress'  => get_post_meta( $post_id, '_bt_contract_address', true ) ?: $default_contract,
+            'chain'            => get_post_meta( $post_id, '_bt_chain', true ) ?: $default_chain,
             'imageUrl'         => get_the_post_thumbnail_url( $post_id, 'medium' ) ?: '',
         ] );
 

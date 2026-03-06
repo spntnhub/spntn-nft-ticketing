@@ -57,7 +57,13 @@ class BT_Events {
         $payment_token    = get_post_meta( $post->ID, '_bt_payment_token',    true );
         $organizer_wallet = get_post_meta( $post->ID, '_bt_organizer_wallet', true ) ?: ( $opts['organizer_wallet'] ?? '' );
         $contract_address = get_post_meta( $post->ID, '_bt_contract_address', true ) ?: ( $opts['contract_address'] ?? '' );
-        ?>
+        $chain            = get_post_meta( $post->ID, '_bt_chain',             true ) ?: ( $opts['chain']             ?? 'polygon' );
+        $allowed_chains   = [
+            'polygon'  => 'Polygon (POL)',
+            'base'     => 'Base (ETH)',
+            'arbitrum' => 'Arbitrum One (ETH)',
+            'optimism' => 'Optimism (ETH)',
+        ];        ?>
         <table class="form-table" style="margin-top:0;">
             <tr>
                 <th><label for="bt_date"><?php esc_html_e( 'Event Date & Time', 'blockchain-ticketing' ); ?></label></th>
@@ -108,7 +114,26 @@ class BT_Events {
                 <th><label for="bt_contract_address"><?php esc_html_e( 'Contract Address', 'blockchain-ticketing' ); ?></label></th>
                 <td>
                     <input type="text" id="bt_contract_address" name="bt_contract_address" value="<?php echo esc_attr( $contract_address ); ?>" class="regular-text" placeholder="0x..." />
-                    <p class="description"><?php esc_html_e( 'TicketNFT contract on Polygon. Defaults to plugin settings.', 'blockchain-ticketing' ); ?></p>
+                    <p class="description"><?php esc_html_e( 'TicketNFT contract on the selected chain. Defaults to plugin settings.', 'blockchain-ticketing' ); ?></p>
+                </td>
+            </tr>
+            <tr>
+                <th><label for="bt_chain"><?php esc_html_e( 'Chain', 'blockchain-ticketing' ); ?></label></th>
+                <td>
+                    <select id="bt_chain" name="bt_chain">
+                        <?php foreach ( $allowed_chains as $slug => $label ) : ?>
+                            <option value="<?php echo esc_attr( $slug ); ?>" <?php selected( $chain, $slug ); ?>>
+                                <?php echo esc_html( $label ); ?>
+                            </option>
+                        <?php endforeach; ?>
+                    </select>
+                    <p class="description">
+                        <?php esc_html_e( 'USDC per chain:', 'blockchain-ticketing' ); ?>
+                        Polygon: <code>0x3c499c...3359</code> &nbsp;
+                        Base: <code>0x833589...2913</code> &nbsp;
+                        Arbitrum: <code>0xaf88d0...5831</code> &nbsp;
+                        Optimism: <code>0x0b2C63...7Ff85</code>
+                    </p>
                 </td>
             </tr>
         </table>
@@ -116,6 +141,16 @@ class BT_Events {
         <script>
         document.getElementById('bt_currency').addEventListener('change', function(){
             document.getElementById('bt_token_row').style.display = this.value === 'ERC20' ? '' : 'none';
+        });
+        // Also toggle token row when chain changes (native symbol updates in label)
+        document.getElementById('bt_chain').addEventListener('change', function() {
+            var nativeLabels = {
+                polygon: 'POL (native)',
+                base: 'ETH (native)',
+                arbitrum: 'ETH (native)',
+                optimism: 'ETH (native)',
+            };
+            document.querySelector('#bt_currency option[value="POL"]').text = nativeLabels[this.value] || 'POL (native)';
         });
         </script>
         <?php
@@ -160,6 +195,7 @@ class BT_Events {
             '_bt_total_supply'     => 'absint',
             '_bt_organizer_wallet' => 'sanitize_text_field',
             '_bt_contract_address' => 'sanitize_text_field',
+            '_bt_chain'            => 'sanitize_text_field',
         ];
 
         foreach ( $fields as $key => $sanitizer ) {

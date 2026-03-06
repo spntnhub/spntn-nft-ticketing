@@ -14,6 +14,7 @@
     var $connectBtn = $('#bt-connect-wallet');
     var $buyBtn     = $('#bt-buy-ticket');
     var $result     = $('#bt-ticket-result');
+    var eventChain  = 'polygon';  // set from event data once loaded
 
     // ── Load event info ────────────────────────────────────────────────────────
     $.post(bt_ajax.url, { action: 'bt_get_event', nonce: bt_ajax.nonce, event_id: eventId })
@@ -23,12 +24,13 @@
       });
 
     function renderEvent(event) {
+      eventChain = event.chain || 'polygon';
       $('#bt-event-name').text(event.name);
       $('#bt-event-date').text(
         event.date ? new Date(event.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : ''
       );
       $('#bt-event-location').text(event.location || '');
-      $('#bt-event-price').text(formatPrice(event.price, event.currency));
+      $('#bt-event-price').text(formatPrice(event.price, event.currency, event.chain));
 
       if (event.totalSupply > 0) {
         var remaining = event.totalSupply - (event.soldCount || 0);
@@ -47,12 +49,15 @@
       }
     }
 
-    function formatPrice(price, currency) {
+    function formatPrice(price, currency, chain) {
       try {
         if (currency === 'ERC20') {
           return (parseInt(price, 10) / 1e6).toFixed(2) + ' USDC';
         }
-        return parseFloat(ethers.formatEther(price)).toFixed(4) + ' POL';
+        var symbol = (chain && window.BT_Chains && window.BT_Chains[chain])
+          ? window.BT_Chains[chain].nativeCurrency.symbol
+          : 'POL';
+        return parseFloat(ethers.formatEther(price)).toFixed(4) + ' ' + symbol;
       } catch (_) {
         return price;
       }
@@ -63,7 +68,7 @@
       try {
         showStatus('Connecting wallet…');
         var address = await BT_Wallet.connect();
-        await BT_Wallet.ensurePolygon();
+        await BT_Wallet.ensureChain(eventChain);
         showStatus('Connected: ' + BT_Wallet.shortAddress(address));
         $connectBtn.text('Connected (' + BT_Wallet.shortAddress(address) + ')').prop('disabled', true);
         $buyBtn.prop('disabled', false);
@@ -91,7 +96,8 @@
         if (!signRes.success) throw new Error(signRes.data || 'Server signing failed');
 
         var d = signRes.data;
-        var { signature, tokenURI, price, currency, paymentToken, organizer, onChainEventId, contractAddress } = d;
+        var { signature, tokenURI, price, currency, paymentToken, organizer, onChainEventId, contractAddress, chain } = d;
+        eventChain = chain || eventChain;
 
         var MINT_ABI = [
           'function mintTicket(address organizer, uint256 eventId, string uri, uint256 price, bytes sig) external payable',
@@ -177,7 +183,7 @@
 
       var txLink = $('#bt-tx-link');
       if (txHash) {
-        txLink.attr('href', 'https://polygonscan.com/tx/' + txHash).show();
+        txLink.attr('href', BT_Wallet.getExplorerTxUrl(eventChain, txHash)).show();
       }
 
       // Generate QR code data: {t: tokenId, w: walletAddress}
