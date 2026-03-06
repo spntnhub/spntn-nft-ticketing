@@ -1,0 +1,64 @@
+<?php
+if ( ! defined( 'ABSPATH' ) ) exit;
+
+class BT_Checkin {
+
+    // ─── Shortcode: [blockchain_checkin] ─────────────────────────────────────
+
+    public static function render_shortcode( array $atts ): string {
+        ob_start();
+        ?>
+        <div id="bt-checkin-container" class="bt-checkin-widget">
+            <h2 class="bt-checkin-title"><?php esc_html_e( 'Ticket Check-In', 'blockchain-ticketing' ); ?></h2>
+
+            <div class="bt-camera-wrap">
+                <video id="bt-camera" autoplay playsinline muted></video>
+                <canvas id="bt-canvas" style="display:none;"></canvas>
+            </div>
+
+            <p id="bt-scan-status" class="bt-scan-status">
+                <?php esc_html_e( 'Point camera at the ticket QR code.', 'blockchain-ticketing' ); ?>
+            </p>
+
+            <div id="bt-scan-result" class="bt-scan-result" style="display:none;"></div>
+
+            <button id="bt-scan-again" class="bt-btn bt-btn-secondary" style="display:none; margin-top:12px;">
+                <?php esc_html_e( 'Scan Next Ticket', 'blockchain-ticketing' ); ?>
+            </button>
+        </div>
+        <?php
+        return ob_get_clean();
+    }
+
+    // ─── AJAX: verify QR + mark used ─────────────────────────────────────────
+
+    public static function ajax_checkin(): void {
+        check_ajax_referer( 'bt_nonce', 'nonce' );
+
+        $token_id = sanitize_text_field( $_POST['token_id'] ?? '' );
+        $wallet   = sanitize_text_field( $_POST['wallet']   ?? '' );
+
+        if ( ! $token_id || ! $wallet ) wp_send_json_error( 'token_id and wallet required' );
+
+        $opts    = get_option( BT_OPTION_KEY, [] );
+        $api_key = $opts['api_key']     ?? '';
+        $backend = rtrim( $opts['backend_url'] ?? 'https://nft-saas-production.up.railway.app', '/' );
+
+        $response = wp_remote_post( $backend . '/api/v2/ticketing/checkin', [
+            'headers' => [
+                'Content-Type' => 'application/json',
+                'X-API-Key'    => $api_key,
+            ],
+            'body'    => wp_json_encode( [
+                'tokenId' => $token_id,
+                'wallet'  => $wallet,
+            ] ),
+            'timeout' => 10,
+        ] );
+
+        if ( is_wp_error( $response ) ) wp_send_json_error( $response->get_error_message() );
+
+        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+        wp_send_json_success( $body );
+    }
+}
