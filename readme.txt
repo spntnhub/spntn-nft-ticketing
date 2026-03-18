@@ -1,8 +1,8 @@
-=== Blockchain Ticketing for WordPress ===
+=== Blockchain Ticketing ===
 Contributors:      spntn
-Tags:              nft, blockchain, ticketing, event tickets, polygon, web3
+Tags:              nft, blockchain, ticketing, polygon, web3
 Requires at least: 6.0
-Tested up to:      6.7
+Tested up to:      6.9
 Requires PHP:      7.4
 Stable tag:        1.0.1
 License:           GPL v2 or later
@@ -12,7 +12,7 @@ Sell and verify NFT event tickets on Polygon. Each ticket is a unique ERC-721 NF
 
 == Description ==
 
-**Blockchain Ticketing for WordPress** lets event organizers sell verifiable NFT tickets directly from their WordPress site — no centralized ticketing platform required.
+**Blockchain Ticketing** lets event organizers sell verifiable NFT tickets directly from their WordPress site — no centralized ticketing platform required.
 
 **How it works:**
 
@@ -34,17 +34,27 @@ Sell and verify NFT event tickets on Polygon. Each ticket is a unique ERC-721 NF
 * 3% protocol fee; 97% goes to the event organizer
 * MetaMask + WalletConnect compatible
 
-== External Services ==
+== External services ==
 
-This plugin connects to the spntn backend API to:
+The Blockchain Ticketing plugin interacts with several external services:
 
-* Create and manage events
-* Generate backend-signed mint vouchers
-* Record and verify ticket sales
+- **NFT SaaS Backend API**
+  - URL: https://nft-saas-production.up.railway.app
+  - Purpose: Handles ticket minting, check-in verification, event management, webhook events, and IPFS uploads. All plugin features rely on this API for core operations.
 
-**Backend URL:** https://nft-saas-production.up.railway.app  
-**Terms of Use:** https://spntn.com/terms  
-**Privacy Policy:** https://spntn.com/privacy  
+- **Polygon Mainnet**
+  - Purpose: Ticket minting and verification are performed on Polygon Mainnet via smart contracts. The plugin interacts with Polygon using ethers.js.
+
+- **IPFS**
+  - Purpose: Ticket metadata and media files are uploaded to IPFS for decentralized storage.
+
+- **Webhook Integrations**
+  - Purpose: Organizers can configure webhook URLs to receive real-time HTTP POST events from the backend when ticket status changes.
+
+- **Explorer Links**
+  - Purpose: Plugin provides links to Polygon block explorers (e.g., Polygonscan) for transaction and ticket verification.
+
+API keys and sensitive credentials are stored server-side and never exposed to frontend users.
 
 Data sent: event details (name, date, location, price), wallet addresses, transaction hashes.  
 Data transmitted when: on event publish, on ticket purchase, on check-in scan.

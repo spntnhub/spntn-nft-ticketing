@@ -1,6 +1,6 @@
 <?php
 /**
- * Plugin Name:       Blockchain Ticketing for WordPress
+ * Plugin Name:       Blockchain Ticketing
  * Plugin URI:        https://github.com/spntnhub/Blockchain-Ticketing-for-WordPress
  * Description:       Sell and verify NFT event tickets on Polygon. Each ticket is a unique ERC-721 token minted directly to the buyer's wallet. 3% protocol fee per sale.
  * Version:           1.0.1
@@ -27,99 +27,58 @@ require_once BT_PLUGIN_DIR . 'includes/class-checkin.php';
 
 // ─── Bootstrap ───────────────────────────────────────────────────────────────
 
+define( 'BLOCTI_VERSION',     '1.0.1' );
+define( 'BLOCTI_PLUGIN_DIR',  plugin_dir_path( __FILE__ ) );
+define( 'BLOCTI_PLUGIN_URL',  plugin_dir_url( __FILE__ ) );
+define( 'BLOCTI_OPTION_KEY',  'blocti_settings' );
+add_action( 'admin_menu', [ 'BT_Admin', 'register_menu' ] );
+require_once BLOCTI_PLUGIN_DIR . 'includes/class-admin.php';
+require_once BLOCTI_PLUGIN_DIR . 'includes/class-events.php';
+require_once BLOCTI_PLUGIN_DIR . 'includes/class-tickets.php';
+require_once BLOCTI_PLUGIN_DIR . 'includes/class-checkin.php';
+// ─── Shortcodes ───────────────────────────────────────────────────────────────
 add_action( 'init', function () {
-    BT_Events::register_post_type();
+    BLOCTI_Events::register_post_type();
 } );
 
-add_action( 'admin_menu', [ 'BT_Admin', 'register_menu' ] );
-add_action( 'admin_init', [ 'BT_Admin', 'register_settings' ] );
-add_action( 'add_meta_boxes', [ 'BT_Events', 'add_meta_boxes' ] );
-add_action( 'save_post_bt_event', [ 'BT_Events', 'save_meta' ], 10, 2 );
+add_action( 'admin_menu', [ 'BLOCTI_Admin', 'register_menu' ] );
+add_action( 'admin_init', [ 'BLOCTI_Admin', 'register_settings' ] );
+add_action( 'add_meta_boxes', [ 'BLOCTI_Events', 'add_meta_boxes' ] );
+add_action( 'save_post_blocti_event', [ 'BLOCTI_Events', 'save_meta' ], 10, 2 );
 
-// ─── Shortcodes ───────────────────────────────────────────────────────────────
+add_shortcode( 'blockchain_event', [ 'BLOCTI_Tickets', 'render_shortcode' ] );
+add_shortcode( 'blockchain_checkin', [ 'BLOCTI_Checkin', 'render_shortcode' ] );
 
-// [blockchain_event id="WP_POST_ID"]  — ticket purchase page
-add_shortcode( 'blockchain_event', [ 'BT_Tickets', 'render_shortcode' ] );
-
-// [blockchain_checkin]                — QR scan / check-in interface
-add_shortcode( 'blockchain_checkin', [ 'BT_Checkin', 'render_shortcode' ] );
-
-// ─── Scripts & Styles ────────────────────────────────────────────────────────
-
-add_action( 'wp_enqueue_scripts', function () {
-    $opts = get_option( BT_OPTION_KEY, [] );
-
+add_action( 'wp_enqueue_scripts', 'blocti_enqueue_assets' );
+function blocti_enqueue_assets() {
     wp_enqueue_style(
-        'bt-styles',
-        BT_PLUGIN_URL . 'assets/styles.css',
+        'blocti-styles',
+        BLOCTI_PLUGIN_URL . 'assets/styles.css',
         [],
-        BT_VERSION
+        BLOCTI_VERSION
     );
-
-    // ethers.js v6 (same version used by Token Membership & Wallet Login)
     wp_enqueue_script(
-        'ethers',
-        'https://cdnjs.cloudflare.com/ajax/libs/ethers/6.7.0/ethers.umd.min.js',
+        'blocti-ethers',
+        BLOCTI_PLUGIN_URL . 'assets/ethers.umd.min.js',
         [],
-        '6.7.0',
+        '6.13.2',
         true
     );
-
-    // QRCode.js for ticket QR generation
     wp_enqueue_script(
-        'qrcodejs',
-        'https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js',
+        'blocti-qrcodejs',
+        BLOCTI_PLUGIN_URL . 'assets/qrcode.min.js',
         [],
         '1.0.0',
         true
     );
-
-    // jsQR for QR scanning on check-in page
     wp_enqueue_script(
-        'jsqr',
-        'https://cdn.jsdelivr.net/npm/jsqr@1.4.0/dist/jsQR.min.js',
+        'blocti-jsqr',
+        BLOCTI_PLUGIN_URL . 'assets/jsQR.js',
         [],
         '1.4.0',
         true
     );
-
-    wp_enqueue_script(
-        'bt-wallet',
-        BT_PLUGIN_URL . 'assets/wallet.js',
-        [ 'ethers', 'jquery' ],
-        BT_VERSION,
-        true
-    );
-
-    wp_enqueue_script(
-        'bt-ticket',
-        BT_PLUGIN_URL . 'assets/ticket.js',
-        [ 'bt-wallet', 'qrcodejs', 'jquery' ],
-        BT_VERSION,
-        true
-    );
-
-    wp_enqueue_script(
-        'bt-checkin',
-        BT_PLUGIN_URL . 'assets/checkin.js',
-        [ 'jsqr', 'jquery' ],
-        BT_VERSION,
-        true
-    );
-
-    wp_localize_script( 'bt-ticket', 'bt_ajax', [
-        'url'           => admin_url( 'admin-ajax.php' ),
-        'nonce'         => wp_create_nonce( 'bt_nonce' ),
-        'backend_url'   => esc_url( $opts['backend_url'] ?? 'https://nft-saas-production.up.railway.app' ),
-    ] );
-
-    wp_localize_script( 'bt-checkin', 'bt_checkin_ajax', [
-        'url'   => admin_url( 'admin-ajax.php' ),
-        'nonce' => wp_create_nonce( 'bt_nonce' ),
-    ] );
-} );
-
-// ─── AJAX Handlers ───────────────────────────────────────────────────────────
+}
 
 add_action( 'wp_ajax_bt_get_event',        [ 'BT_Tickets', 'ajax_get_event'    ] );
 add_action( 'wp_ajax_nopriv_bt_get_event', [ 'BT_Tickets', 'ajax_get_event'    ] );
