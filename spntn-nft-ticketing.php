@@ -1,7 +1,7 @@
 <?php
 /**
  * Plugin Name:       SPNTN NFT Ticketing
- * Plugin URI:        https://github.com/spntnhub/SPNTN-NFT-Ticketing-for-WordPress
+ * Plugin URI:        https://github.com/spntnhub/spntn-nft-ticketing
  * Description:       Sell and verify NFT event tickets on Polygon. Each ticket is a unique ERC-721 token minted directly to the buyer's wallet. 3% protocol fee per sale.
  * Version:           1.0.1
  * Requires at least: 6.0
@@ -32,10 +32,10 @@ define( 'SPNTN_NFT_PLUGIN_DIR',  plugin_dir_path( __FILE__ ) );
 define( 'SPNTN_NFT_PLUGIN_URL',  plugin_dir_url( __FILE__ ) );
 define( 'SPNTN_NFT_OPTION_KEY',  'spntn_nft_settings' );
 add_action( 'admin_menu', [ 'SPNTN_NFT_Admin', 'register_menu' ] );
-require_once SPNTN_NFT_PLUGIN_DIR . 'includes/class-admin.php';
-require_once SPNTN_NFT_PLUGIN_DIR . 'includes/class-events.php';
-require_once SPNTN_NFT_PLUGIN_DIR . 'includes/class-tickets.php';
-require_once SPNTN_NFT_PLUGIN_DIR . 'includes/class-checkin.php';
+require_once SPNTN_NFT_PLUGIN_DIR . 'spntn-nft-includes/class-admin.php';
+require_once SPNTN_NFT_PLUGIN_DIR . 'spntn-nft-includes/class-events.php';
+require_once SPNTN_NFT_PLUGIN_DIR . 'spntn-nft-includes/class-tickets.php';
+require_once SPNTN_NFT_PLUGIN_DIR . 'spntn-nft-includes/class-checkin.php';
 // ─── Shortcodes ───────────────────────────────────────────────────────────────
 add_action( 'init', function () {
     SPNTN_NFT_Events::register_post_type();
