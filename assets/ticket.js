@@ -11,21 +11,30 @@
 
     var eventId     = $container.data('event-id');
     var $status     = $('#bt-status');
+    var $spinner    = $('#bt-spinner');
+    var $statusText = $('#bt-status-text');
+    var $progress   = $('#bt-progress');
+    var $progressBar = $('#bt-progress-bar');
     var $connectBtn = $('#bt-connect-wallet');
     var $buyBtn     = $('#bt-buy-ticket');
     var $result     = $('#bt-ticket-result');
     var eventChain  = 'polygon';  // set from event data once loaded
+    var eventContractAddress = '';
 
     // ── Load event info ────────────────────────────────────────────────────────
     $.post(bt_ajax.url, { action: 'bt_get_event', nonce: bt_ajax.nonce, event_id: eventId })
       .done(function (res) {
         if (res.success && res.data) renderEvent(res.data);
         else showStatus('Could not load event details.', true);
+      })
+      .fail(function () {
+        showStatus('Could not load event details. Please refresh the page.', true);
       });
 
     function renderEvent(event) {
       eventChain = event.chain || 'polygon';
-      $('#bt-event-name').text(event.name);
+      var $name = $('#bt-event-name');
+      $name.text(event.name).removeAttr('aria-busy');
       $('#bt-event-date').text(
         event.date ? new Date(event.date).toLocaleDateString(undefined, { year: 'numeric', month: 'long', day: 'numeric' }) : ''
       );
@@ -65,15 +74,25 @@
 
     // ── Connect wallet ─────────────────────────────────────────────────────────
     $connectBtn.on('click', async function () {
+      // MetaMask not installed — show link inline
+      if (!window.ethereum) {
+        $status.html(
+          'MetaMask not found. <a href="https://metamask.io" target="_blank" rel="noopener noreferrer">Install MetaMask</a> to buy NFT tickets.'
+        ).show().addClass('bt-error').removeClass('bt-success');
+        setTimeout(function () { $status[0].focus(); }, 50);
+        return;
+      }
+
       try {
-        showStatus('Connecting wallet…');
+        showStatus('Connecting wallet...');
         var address = await BT_Wallet.connect();
         await BT_Wallet.ensureChain(eventChain);
-        showStatus('Connected: ' + BT_Wallet.shortAddress(address));
+        showStatus('Connected: ' + BT_Wallet.shortAddress(address), false, true);
         $connectBtn.text('Connected (' + BT_Wallet.shortAddress(address) + ')').prop('disabled', true);
         $buyBtn.prop('disabled', false);
       } catch (e) {
         showStatus(e.message || 'Connection failed.', true);
+        setTimeout(function () { $status[0].focus(); }, 50);
       }
     });
 
@@ -81,11 +100,27 @@
     $buyBtn.on('click', async function () {
       if (!BT_Wallet.address) return;
 
-      $buyBtn.prop('disabled', true).text('Processing…');
+      // Verify wallet is still connected
+      try {
+        var currentAddr = await BT_Wallet.signer.getAddress();
+        if (currentAddr.toLowerCase() !== BT_Wallet.address.toLowerCase()) {
+          throw new Error('address_changed');
+        }
+      } catch (_) {
+        showStatus('Wallet disconnected. Please reconnect.', true);
+        $connectBtn.text('Connect Wallet').prop('disabled', false);
+        $buyBtn.prop('disabled', true);
+        BT_Wallet.address = null;
+        setTimeout(function () { $status[0].focus(); }, 50);
+        return;
+      }
+
+      $buyBtn.prop('disabled', true).text('Processing...');
+      setProgress(10);
 
       try {
         // 1. Get backend signature
-        showStatus('Getting authorization from server…');
+        showStatus('Getting authorization from server...');
         var signRes = await $.post(bt_ajax.url, {
           action:        'bt_sign_ticket',
           nonce:         bt_ajax.nonce,
@@ -98,6 +133,7 @@
         var d = signRes.data;
         var { signature, tokenURI, price, currency, paymentToken, organizer, onChainEventId, contractAddress, chain } = d;
         eventChain = chain || eventChain;
+        eventContractAddress = contractAddress || '';
 
         var MINT_ABI = [
           'function mintTicket(address organizer, uint256 eventId, string uri, uint256 price, bytes sig) external payable',
@@ -112,23 +148,30 @@
         var tx;
 
         if (currency === 'ERC20') {
-          showStatus('Approving token spend…');
+          setProgress(25);
+          showStatus('Approving token spend...');
           var tokenContract = new ethers.Contract(paymentToken, ERC20_ABI, BT_Wallet.signer);
           var allowance = await tokenContract.allowance(BT_Wallet.address, contractAddress);
           if (BigInt(allowance) < BigInt(price)) {
             var approveTx = await tokenContract.approve(contractAddress, price);
-            showStatus('Waiting for approval confirmation…');
+            setProgress(40);
+            showStatus('Waiting for approval confirmation...');
             await approveTx.wait();
           }
-          showStatus('Confirm ticket purchase in MetaMask…');
+          setProgress(55);
+          showStatus('Confirm ticket purchase in MetaMask...');
           tx = await contract.mintTicketERC20(organizer, BigInt(onChainEventId), tokenURI, BigInt(price), paymentToken, signature);
+          setProgress(70);
         } else {
-          showStatus('Confirm ticket purchase in MetaMask…');
+          setProgress(30);
+          showStatus('Confirm ticket purchase in MetaMask...');
           tx = await contract.mintTicket(organizer, BigInt(onChainEventId), tokenURI, BigInt(price), signature, { value: BigInt(price) });
+          setProgress(55);
         }
 
-        showStatus('Waiting for blockchain confirmation…');
+        showStatus('Waiting for blockchain confirmation...');
         var receipt = await tx.wait();
+        setProgress(80);
 
         // 2. Parse tokenId from TicketMinted event
         var tokenId = null;
@@ -147,36 +190,64 @@
           }
         } catch (_) {}
 
+        if (!tokenId) {
+          throw new Error('Ticket mint confirmed but token ID could not be read from logs. Transaction: ' + receipt.hash);
+        }
+
         // 3. Record on backend
-        await $.post(bt_ajax.url, {
+        showStatus('Recording your ticket...');
+        var recordRes = await $.post(bt_ajax.url, {
           action:        'bt_record_sale',
           nonce:         bt_ajax.nonce,
           event_id:      eventId,
-          token_id:      tokenId || '0',
+          token_id:      tokenId,
           tx_hash:       receipt.hash,
           buyer_address: BT_Wallet.address,
         });
 
+        setProgress(100);
+
+        if (!recordRes || !recordRes.success) {
+          var errMsg = (recordRes && recordRes.data) || 'Ticket minted but sale record failed.';
+          errMsg += ' Transaction: ' + receipt.hash;
+          throw new Error(errMsg);
+        }
+        if (recordRes.data && recordRes.data.recorded === false) {
+          throw new Error('Ticket minted but sale record was rejected as duplicate. Transaction: ' + receipt.hash);
+        }
+
         // 4. Show success
-        showTicketResult(tokenId, receipt.hash);
+        showTicketResult(tokenId, receipt.hash, eventId, eventContractAddress);
 
       } catch (e) {
         var msg = e.reason || e.shortMessage || e.message || 'Transaction failed';
         showStatus(msg, true);
         $buyBtn.prop('disabled', false).text('Buy Ticket');
+        $progress.hide();
+        setTimeout(function () { $status[0].focus(); }, 50);
       }
     });
 
     // ── Helpers ────────────────────────────────────────────────────────────────
 
-    function showStatus(msg, isError) {
-      $status.text(msg).show()
+    function showStatus(msg, isError, noSpinner) {
+      var processing = !isError && !noSpinner;
+      $spinner.toggle(processing);
+      $statusText.text(msg);
+      $status.show()
         .toggleClass('bt-error',   !!isError)
-        .toggleClass('bt-success', !isError);
+        .toggleClass('bt-success', !isError && !!noSpinner);
     }
 
-    function showTicketResult(tokenId, txHash) {
+    function setProgress(pct) {
+      $progress.show();
+      $progressBar.css('width', pct + '%');
+      $('#bt-progress').attr('aria-valuenow', pct);
+    }
+
+    function showTicketResult(tokenId, txHash, backendEventId, contractAddress) {
       $buyBtn.hide();
+      $progress.hide();
       $result.show();
 
       $('#bt-token-id').text(tokenId ? '#' + tokenId : '');
@@ -186,15 +257,37 @@
         txLink.attr('href', BT_Wallet.getExplorerTxUrl(eventChain, txHash)).show();
       }
 
-      // Generate QR code data: {t: tokenId, w: walletAddress}
+      // Generate QR payload: tokenId + wallet + backend event + contract.
       if (tokenId && typeof QRCode !== 'undefined') {
-        var qrData = JSON.stringify({ t: parseInt(tokenId, 10), w: BT_Wallet.address });
+        var qrData = JSON.stringify({
+          t: parseInt(tokenId, 10),
+          w: BT_Wallet.address,
+          e: backendEventId,
+          c: contractAddress || ''
+        });
         var el = document.getElementById('bt-qr-code');
         el.innerHTML = '';
-        new QRCode(el, { text: qrData, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.H });
+        try {
+          new QRCode(el, { text: qrData, width: 220, height: 220, correctLevel: QRCode.CorrectLevel.H });
+          // Offer download after canvas renders
+          setTimeout(function () {
+            var canvas = el.querySelector('canvas');
+            if (canvas) {
+              $('#bt-qr-download')
+                .attr('href', canvas.toDataURL('image/png'))
+                .attr('download', 'ticket-' + tokenId + '.png');
+              $('#bt-qr-download-wrap').show();
+            }
+          }, 100);
+        } catch (_) {
+          showStatus('Ticket purchased but QR code could not be generated. Note your Token #' + tokenId, true);
+        }
       }
 
-      showStatus('Ticket minted successfully! 🎉');
+      showStatus('Ticket minted successfully!', false, true);
+
+      // Move focus to the result area for keyboard / screen reader users
+      setTimeout(function () { $result[0].focus(); }, 100);
     }
   });
 

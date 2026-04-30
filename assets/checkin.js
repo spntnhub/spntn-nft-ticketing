@@ -10,33 +10,50 @@
     var $container = $('#bt-checkin-container');
     if (!$container.length) return;
 
-    var video       = document.getElementById('bt-camera');
-    var canvas      = document.getElementById('bt-canvas');
-    var context     = canvas ? canvas.getContext('2d') : null;
-    var $scanStatus = $('#bt-scan-status');
-    var $result     = $('#bt-scan-result');
-    var $scanAgain  = $('#bt-scan-again');
-    var scanning    = false;
-    var animFrame   = null;
+    var video        = document.getElementById('bt-camera');
+    var canvas       = document.getElementById('bt-canvas');
+    var context      = canvas ? canvas.getContext('2d') : null;
+    var $scanStatus  = $('#bt-scan-status');
+    var $result      = $('#bt-scan-result');
+    var $scanAgain   = $('#bt-scan-again');
+    var $retryCamera = $('#bt-retry-camera');
+    var scanning     = false;
+    var animFrame    = null;
+    var stream       = null;
 
-    // Request camera access
+    // ── Camera init ───────────────────────────────────────────────────────────
+
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       $scanStatus.text('Camera not supported on this device or browser.');
+      $retryCamera.hide();
       return;
     }
 
-    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
-      .then(function (stream) {
-        video.srcObject = stream;
-        video.setAttribute('playsinline', true);
-        video.play();
-        scanning = true;
-        $scanStatus.text('Scanning… point camera at QR code.');
-        tick();
-      })
-      .catch(function (err) {
-        $scanStatus.text('Camera access denied: ' + err.message);
-      });
+    function startCamera() {
+      navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } })
+        .then(function (s) {
+          stream = s;
+          video.srcObject = stream;
+          video.setAttribute('playsinline', true);
+          video.play();
+          scanning = true;
+          $scanStatus.text('Scanning... point camera at QR code.');
+          tick();
+        })
+        .catch(function (err) {
+          $scanStatus.text('Camera access denied. Check browser permissions and try again.');
+          $retryCamera.show();
+        });
+    }
+
+    startCamera();
+
+    $retryCamera.on('click', function () {
+      $retryCamera.hide();
+      startCamera();
+    });
+
+    // ── QR scan loop ──────────────────────────────────────────────────────────
 
     function tick() {
       if (!scanning) return;
@@ -60,8 +77,10 @@
       animFrame = requestAnimationFrame(tick);
     }
 
+    // ── QR processing ─────────────────────────────────────────────────────────
+
     function processQR(rawData) {
-      $scanStatus.text('Verifying ticket…');
+      $scanStatus.text('Verifying ticket...');
 
       var parsed;
       try {
@@ -71,19 +90,29 @@
         return;
       }
 
-      var tokenId = parsed.t;
-      var wallet  = parsed.w;
+      var tokenId         = parsed.t;
+      var wallet          = parsed.w;
+      var eventId         = parsed.e || '';
+      var contractAddress = parsed.c || '';
 
       if (!tokenId || !wallet) {
         showResult('invalid', 'QR code data is incomplete.');
         return;
       }
 
+      verifyTicket(tokenId, wallet, eventId, contractAddress);
+    }
+
+    function verifyTicket(tokenId, wallet, eventId, contractAddress) {
+      $scanStatus.text('Verifying ticket...');
+
       $.post(bt_checkin_ajax.url, {
-        action:   'bt_checkin',
-        nonce:    bt_checkin_ajax.nonce,
-        token_id: tokenId,
-        wallet:   wallet,
+        action:           'bt_checkin',
+        nonce:            bt_checkin_ajax.nonce,
+        token_id:         tokenId,
+        wallet:           wallet,
+        event_id:         eventId,
+        contract_address: contractAddress,
       })
         .done(function (res) {
           if (res.success && res.data) {
@@ -104,46 +133,83 @@
         });
     }
 
+    // ── Result display ────────────────────────────────────────────────────────
+
     function showResult(type, reason, ticketData) {
       $result.show();
       $scanAgain.show();
       $result.removeClass('bt-result-valid bt-result-invalid bt-result-used');
 
+      var html = '';
+
       if (type === 'valid') {
         $result.addClass('bt-result-valid');
-        var html = '<span class="bt-result-icon">✅</span>';
+        html += '<span class="bt-result-icon bt-icon-valid" aria-hidden="true"></span>';
         html += '<strong class="bt-result-title">Valid Ticket</strong>';
         if (ticketData) {
           html += '<ul class="bt-ticket-details">';
-          if (ticketData.eventName)  html += '<li><b>Event:</b> ' + escHtml(ticketData.eventName) + '</li>';
-          if (ticketData.eventDate)  html += '<li><b>Date:</b> '  + escHtml(new Date(ticketData.eventDate).toLocaleDateString()) + '</li>';
+          if (ticketData.eventName)   html += '<li><b>Event:</b> '  + escHtml(ticketData.eventName) + '</li>';
+          if (ticketData.eventDate)   html += '<li><b>Date:</b> '   + escHtml(new Date(ticketData.eventDate).toLocaleDateString()) + '</li>';
           if (ticketData.buyerWallet) {
-            var short = ticketData.buyerWallet.slice(0, 8) + '…' + ticketData.buyerWallet.slice(-6);
+            var short = ticketData.buyerWallet.slice(0, 8) + '...' + ticketData.buyerWallet.slice(-6);
             html += '<li><b>Wallet:</b> ' + escHtml(short) + '</li>';
           }
           if (ticketData.tokenId) html += '<li><b>Token #</b>' + escHtml(String(ticketData.tokenId)) + '</li>';
           html += '</ul>';
         }
-        $result.html(html);
-        $scanStatus.text('Entry granted!');
+        $scanStatus.text('Entry granted.');
       } else if (type === 'already_used') {
         $result.addClass('bt-result-used');
-        $result.html('<span class="bt-result-icon">⚠️</span><strong class="bt-result-title">Already Used</strong><p>' + escHtml(reason) + '</p>');
+        html += '<span class="bt-result-icon bt-icon-used" aria-hidden="true"></span>';
+        html += '<strong class="bt-result-title">Already Used</strong>';
+        html += '<p>' + escHtml(reason) + '</p>';
         $scanStatus.text('Ticket was already scanned.');
       } else {
         $result.addClass('bt-result-invalid');
-        $result.html('<span class="bt-result-icon">❌</span><strong class="bt-result-title">Invalid Ticket</strong><p>' + escHtml(reason || 'This ticket is not valid for entry.') + '</p>');
+        html += '<span class="bt-result-icon bt-icon-invalid" aria-hidden="true"></span>';
+        html += '<strong class="bt-result-title">Invalid Ticket</strong>';
+        html += '<p>' + escHtml(reason || 'This ticket is not valid for entry.') + '</p>';
         $scanStatus.text('Entry denied.');
       }
+
+      $result.html(html);
+
+      // Move focus to result for keyboard / screen reader users
+      setTimeout(function () { $result[0].focus(); }, 50);
     }
+
+    // ── Scan again ────────────────────────────────────────────────────────────
 
     $scanAgain.on('click', function () {
       $result.hide().html('');
       $scanAgain.hide();
-      $scanStatus.text('Scanning…');
+      $scanStatus.text('Scanning...');
       scanning = true;
       tick();
     });
+
+    // ── Manual entry ──────────────────────────────────────────────────────────
+
+    $('#bt-show-manual').on('click', function () {
+      $('#bt-manual-entry').toggle();
+    });
+
+    $('#bt-manual-verify').on('click', function () {
+      var tokenId = $('#bt-manual-token').val().trim();
+      var wallet  = $('#bt-manual-wallet').val().trim();
+      var eventId = $('#bt-manual-event').val().trim();
+
+      if (!tokenId || !wallet) {
+        $scanStatus.text('Token ID and wallet address are required.');
+        return;
+      }
+
+      scanning = false;
+      cancelAnimationFrame(animFrame);
+      verifyTicket(parseInt(tokenId, 10), wallet, eventId, '');
+    });
+
+    // ── HTML escape ───────────────────────────────────────────────────────────
 
     function escHtml(str) {
       return String(str)

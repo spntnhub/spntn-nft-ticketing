@@ -10,39 +10,49 @@ class BT_Tickets {
         $post_id = (int) $atts['id'];
 
         if ( ! $post_id ) {
-            return '<p class="bt-error">' . esc_html__( 'Invalid event ID.', 'blockchain-ticketing' ) . '</p>';
+            return '<p class="bt-error">' . esc_html__( 'Invalid event ID.', 'spntn-nft-ticketing' ) . '</p>';
         }
 
         $backend_event_id = get_post_meta( $post_id, '_bt_backend_event_id', true );
         if ( ! $backend_event_id ) {
-            return '<p class="bt-error">' . esc_html__( 'Event not yet synced to backend. Please publish the event from WP admin.', 'blockchain-ticketing' ) . '</p>';
+            return '<p class="bt-error">' . esc_html__( 'Event not yet synced to backend. Please publish the event from WP admin.', 'spntn-nft-ticketing' ) . '</p>';
         }
 
         ob_start();
         ?>
         <div id="bt-event-container" data-event-id="<?php echo esc_attr( $backend_event_id ); ?>" class="bt-ticket-widget">
             <div class="bt-event-header">
-                <h2 id="bt-event-name" class="bt-event-title">Loading…</h2>
+                <h2 id="bt-event-name" class="bt-event-title" aria-busy="true"><?php esc_html_e( 'Loading event...', 'spntn-nft-ticketing' ); ?></h2>
                 <p id="bt-event-date" class="bt-event-meta"></p>
                 <p id="bt-event-location" class="bt-event-meta"></p>
             </div>
             <div class="bt-ticket-info">
-                <span class="bt-price-label"><?php esc_html_e( 'Price:', 'blockchain-ticketing' ); ?> <strong id="bt-event-price">—</strong></span>
+                <span class="bt-price-label"><?php esc_html_e( 'Price:', 'spntn-nft-ticketing' ); ?> <strong id="bt-event-price">—</strong></span>
                 <span class="bt-supply-label" id="bt-supply"></span>
             </div>
 
             <div class="bt-actions">
-                <button id="bt-connect-wallet" class="bt-btn bt-btn-secondary"><?php esc_html_e( 'Connect Wallet', 'blockchain-ticketing' ); ?></button>
-                <button id="bt-buy-ticket" class="bt-btn bt-btn-primary" disabled><?php esc_html_e( 'Buy Ticket', 'blockchain-ticketing' ); ?></button>
+                <button id="bt-connect-wallet" class="bt-btn bt-btn-secondary" aria-label="<?php esc_attr_e( 'Connect your MetaMask wallet', 'spntn-nft-ticketing' ); ?>"><?php esc_html_e( 'Connect Wallet', 'spntn-nft-ticketing' ); ?></button>
+                <button id="bt-buy-ticket" class="bt-btn bt-btn-primary" disabled aria-label="<?php esc_attr_e( 'Buy NFT ticket', 'spntn-nft-ticketing' ); ?>"><?php esc_html_e( 'Buy Ticket', 'spntn-nft-ticketing' ); ?></button>
             </div>
 
-            <p id="bt-status" class="bt-status" style="display:none;"></p>
+            <div id="bt-progress" class="bt-progress" style="display:none;" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="0">
+                <div id="bt-progress-bar" class="bt-progress-bar"></div>
+            </div>
 
-            <div id="bt-ticket-result" style="display:none;" class="bt-ticket-result">
-                <h3><?php esc_html_e( 'Your Ticket', 'blockchain-ticketing' ); ?> <span id="bt-token-id"></span></h3>
-                <p class="bt-success-msg"><?php esc_html_e( 'Show this QR code at the event entrance.', 'blockchain-ticketing' ); ?></p>
+            <p id="bt-status" class="bt-status" role="alert" aria-live="polite" style="display:none;">
+                <span id="bt-spinner" class="bt-spinner" style="display:none;" aria-hidden="true"></span>
+                <span id="bt-status-text"></span>
+            </p>
+
+            <div id="bt-ticket-result" style="display:none;" class="bt-ticket-result" tabindex="-1">
+                <h3><?php esc_html_e( 'Your Ticket', 'spntn-nft-ticketing' ); ?> <span id="bt-token-id"></span></h3>
+                <p class="bt-success-msg"><?php esc_html_e( 'Show this QR code at the event entrance.', 'spntn-nft-ticketing' ); ?></p>
                 <div id="bt-qr-code" class="bt-qr-container"></div>
-                <p><a id="bt-tx-link" href="#" target="_blank" rel="noopener" style="display:none;"><?php esc_html_e( 'View on Explorer', 'blockchain-ticketing' ); ?></a></p>
+                <div id="bt-qr-download-wrap" style="display:none; margin-top:12px;">
+                    <a id="bt-qr-download" class="bt-btn bt-btn-secondary bt-qr-download" href="#"><?php esc_html_e( 'Save Ticket QR', 'spntn-nft-ticketing' ); ?></a>
+                </div>
+                <p><a id="bt-tx-link" href="#" target="_blank" rel="noopener noreferrer" style="display:none;"><?php esc_html_e( 'View on Explorer', 'spntn-nft-ticketing' ); ?></a></p>
             </div>
         </div>
         <?php
@@ -54,7 +64,7 @@ class BT_Tickets {
     public static function ajax_get_event(): void {
         check_ajax_referer( 'bt_nonce', 'nonce' );
 
-        $event_id = sanitize_text_field( $_POST['event_id'] ?? '' );
+        $event_id = isset( $_POST['event_id'] ) ? sanitize_text_field( wp_unslash( $_POST['event_id'] ) ) : '';
         if ( ! $event_id ) wp_send_json_error( 'event_id required' );
 
         $opts    = get_option( BT_OPTION_KEY, [] );
@@ -81,8 +91,8 @@ class BT_Tickets {
     public static function ajax_sign_ticket(): void {
         check_ajax_referer( 'bt_nonce', 'nonce' );
 
-        $event_id      = sanitize_text_field( $_POST['event_id']      ?? '' );
-        $buyer_address = sanitize_text_field( $_POST['buyer_address']  ?? '' );
+        $event_id      = isset( $_POST['event_id'] ) ? sanitize_text_field( wp_unslash( $_POST['event_id'] ) ) : '';
+        $buyer_address = isset( $_POST['buyer_address'] ) ? sanitize_text_field( wp_unslash( $_POST['buyer_address'] ) ) : '';
 
         if ( ! $event_id || ! $buyer_address ) wp_send_json_error( 'Missing params' );
 
@@ -117,10 +127,10 @@ class BT_Tickets {
     public static function ajax_record_sale(): void {
         check_ajax_referer( 'bt_nonce', 'nonce' );
 
-        $event_id      = sanitize_text_field( $_POST['event_id']      ?? '' );
-        $token_id      = sanitize_text_field( $_POST['token_id']       ?? '' );
-        $tx_hash       = sanitize_text_field( $_POST['tx_hash']        ?? '' );
-        $buyer_address = sanitize_text_field( $_POST['buyer_address']  ?? '' );
+        $event_id      = isset( $_POST['event_id'] ) ? sanitize_text_field( wp_unslash( $_POST['event_id'] ) ) : '';
+        $token_id      = isset( $_POST['token_id'] ) ? sanitize_text_field( wp_unslash( $_POST['token_id'] ) ) : '';
+        $tx_hash       = isset( $_POST['tx_hash'] ) ? sanitize_text_field( wp_unslash( $_POST['tx_hash'] ) ) : '';
+        $buyer_address = isset( $_POST['buyer_address'] ) ? sanitize_text_field( wp_unslash( $_POST['buyer_address'] ) ) : '';
 
         if ( ! $event_id || ! $token_id || ! $tx_hash || ! $buyer_address ) {
             wp_send_json_error( 'Missing params' );
@@ -146,12 +156,21 @@ class BT_Tickets {
 
         if ( is_wp_error( $response ) ) wp_send_json_error( $response->get_error_message() );
 
-        $body = json_decode( wp_remote_retrieve_body( $response ), true );
+        $status = (int) wp_remote_retrieve_response_code( $response );
+        $body   = json_decode( wp_remote_retrieve_body( $response ), true );
+
+        if ( $status === 409 ) {
+            wp_send_json_success( [ 'recorded' => false, 'reason' => $body['error'] ?? 'Already recorded' ] );
+        }
+
+        if ( $status < 200 || $status >= 300 ) {
+            wp_send_json_error( $body['error'] ?? 'Failed to record sale' );
+        }
+
         if ( ! empty( $body['data'] ) ) {
             wp_send_json_success( $body['data'] );
-        } else {
-            // 409 = already recorded — not a hard failure
-            wp_send_json_success( [ 'recorded' => false ] );
         }
+
+        wp_send_json_error( 'Sale record response missing data' );
     }
 }

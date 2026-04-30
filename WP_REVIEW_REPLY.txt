@@ -1,0 +1,28 @@
+Hi Plugin Review Team,
+
+Thank you for the detailed review and for updating the plugin slug to spntn-nft-ticketing.
+
+I have addressed the reported issues in the latest uploaded version:
+
+1. PHP syntax error
+- The broken duplicate source tree that caused the parse error was removed.
+- The active plugin source now passes PHP lint checks.
+
+2. Script and style loading
+- Frontend assets are loaded with wp_enqueue_script() / wp_enqueue_style().
+- Admin-side dynamic JS blocks were moved from direct <script> tags to wp_add_inline_script() on enqueued handles.
+
+3. Internationalization text domain
+- All gettext calls were updated to use the plugin slug text domain: spntn-nft-ticketing.
+- Plugin header Text Domain was also updated accordingly.
+
+Additionally:
+- I reviewed the plugin package to remove duplicate legacy artifacts.
+- I updated readme.txt external-services disclosure for clarity.
+
+Please continue the review process with the latest uploaded package.
+
+Thank you for your time and guidance.
+
+Best regards,
+spntn

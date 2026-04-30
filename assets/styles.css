@@ -75,6 +75,11 @@
   cursor: not-allowed;
 }
 
+.bt-btn:focus-visible {
+  outline: 2px solid #7c3aed;
+  outline-offset: 2px;
+}
+
 .bt-btn-primary {
   background: #7c3aed;
   color: #fff;
@@ -90,9 +95,47 @@
 
 .bt-btn-secondary:not(:disabled):hover { background: #e9e9e9; }
 
+/* ── Progress bar ──────────────────────────────────────────────────────────── */
+
+@keyframes bt-spin {
+  to { transform: rotate(360deg); }
+}
+
+.bt-progress {
+  height: 3px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  overflow: hidden;
+  margin-bottom: 14px;
+}
+
+.bt-progress-bar {
+  height: 100%;
+  background: #7c3aed;
+  border-radius: 2px;
+  transition: width .4s ease;
+}
+
+/* ── Spinner ───────────────────────────────────────────────────────────────── */
+
+.bt-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid #d1d5db;
+  border-top-color: #7c3aed;
+  border-radius: 50%;
+  animation: bt-spin .7s linear infinite;
+  vertical-align: middle;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
 /* ── Status messages ───────────────────────────────────────────────────────── */
 
 .bt-status {
+  display: flex;
+  align-items: center;
   padding: 10px 14px;
   border-radius: 6px;
   font-size: .9rem;
@@ -122,6 +165,7 @@
   padding-top: 24px;
   border-top: 1px solid #f0f0f0;
   text-align: center;
+  outline: none;
 }
 
 .bt-ticket-result h3 {
@@ -147,6 +191,12 @@
 .bt-qr-container img,
 .bt-qr-container canvas {
   display: block;
+}
+
+.bt-qr-download {
+  margin-top: 12px;
+  display: inline-block;
+  text-decoration: none;
 }
 
 /* ── Check-in Widget ───────────────────────────────────────────────────────── */
@@ -194,6 +244,7 @@
   border-radius: 10px;
   margin-bottom: 12px;
   text-align: center;
+  outline: none;
 }
 
 .bt-result-valid {
@@ -211,11 +262,27 @@
   border: 2px solid #f59e0b;
 }
 
+/* CSS-based result icons — no emoji */
 .bt-result-icon {
-  font-size: 2.5rem;
-  display: block;
-  margin-bottom: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: 50%;
+  margin: 0 auto 12px;
+  font-size: 1.4rem;
+  font-weight: 700;
+  color: #fff;
 }
+
+.bt-icon-valid   { background: #22c55e; }
+.bt-icon-used    { background: #f59e0b; }
+.bt-icon-invalid { background: #ef4444; }
+
+.bt-icon-valid::after   { content: '\2713'; }
+.bt-icon-used::after    { content: '!'; }
+.bt-icon-invalid::after { content: '\00D7'; }
 
 .bt-result-title {
   font-size: 1.2rem;
@@ -239,4 +306,70 @@
 
 .bt-ticket-details li {
   padding: 3px 0;
+}
+
+/* ── Manual entry form ─────────────────────────────────────────────────────── */
+
+.bt-manual-divider {
+  margin-top: 20px;
+  border-top: 1px solid #f0f0f0;
+  padding-top: 16px;
+}
+
+.bt-manual-entry {
+  margin-top: 12px;
+  padding: 14px;
+  background: #f9fafb;
+  border-radius: 8px;
+  border: 1px solid #e5e7eb;
+}
+
+.bt-manual-label {
+  display: block;
+  font-size: .85rem;
+  font-weight: 600;
+  color: #374151;
+  margin-bottom: 4px;
+}
+
+.bt-manual-input {
+  width: 100%;
+  margin-bottom: 10px;
+  padding: 8px 10px;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  font-size: .9rem;
+  box-sizing: border-box;
+  font-family: inherit;
+}
+
+.bt-manual-input:focus {
+  outline: 2px solid #7c3aed;
+  outline-offset: 1px;
+}
+
+/* ── Mobile ────────────────────────────────────────────────────────────────── */
+
+@media (max-width: 480px) {
+  .bt-ticket-widget {
+    padding: 20px 16px;
+    margin: 12px auto;
+  }
+
+  .bt-checkin-widget {
+    margin: 12px auto;
+  }
+
+  .bt-event-title {
+    font-size: 1.3rem;
+  }
+
+  .bt-btn {
+    min-height: 44px;
+    padding: 12px 18px;
+  }
+
+  .bt-camera-wrap video {
+    max-height: 260px;
+  }
 }
